@@ -1,0 +1,158 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Tables } from "@/integrations/supabase/types";
+
+type TreeEvent = Tables<'tree_events'> & {
+  random_events: Tables<'random_events'> | null;
+};
+
+interface TreeEventLogProps {
+  treeId: string;
+  refreshKey?: number; // Add prop to force refresh
+}
+
+const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
+  const [events, setEvents] = useState<TreeEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    console.log("🪵 TreeEventLog effect: treeId", treeId, "refreshKey", refreshKey);
+    const fetchTreeEvents = async () => {
+      try {
+        console.log("📜 TreeEventLog: Fetching events for tree:", treeId, "refreshKey:", refreshKey);
+        
+        const { data, error } = await supabase
+          .from('tree_events')
+          .select(`
+            *,
+            random_events (*)
+          `)
+          .eq('tree_id', treeId)
+          .order('occurred_at', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error("❌ Error fetching tree events:", error);
+          return;
+        }
+
+        console.log("✅ Tree events data:", data);
+        setEvents(data || []);
+      } catch (error) {
+        console.error("❌ Error fetching tree events:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (treeId) {
+      fetchTreeEvents();
+    }
+  }, [treeId, refreshKey]);
+
+  const getHealthBadgeColor = (healthImpact?: string) => {
+    switch (healthImpact) {
+      case 'positive': return 'bg-green-100 text-green-800';
+      case 'negative': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatEventChanges = (event: TreeEvent) => {
+    const changes = [];
+    if (event.water_change !== 0) {
+      changes.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
+    }
+    if (event.sunlight_change !== 0) {
+      changes.push(`☀️ ${event.sunlight_change > 0 ? '+' : ''}${event.sunlight_change}`);
+    }
+    if (event.feed_change !== 0) {
+      changes.push(`🍎 ${event.feed_change > 0 ? '+' : ''}${event.feed_change}`);
+    }
+    if (event.love_change !== 0) {
+      changes.push(`❤️ ${event.love_change > 0 ? '+' : ''}${event.love_change}`);
+    }
+    return changes.join(' ');
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}d ago`;
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Events</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-500">Loading events...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <span>🌟</span>
+          <span>Recent Events</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {events.length === 0 ? (
+          <p className="text-gray-500 text-sm">No events yet. Your tree's journey is just beginning!</p>
+        ) : (
+          <ScrollArea className="h-[300px] pr-4">
+            <div className="space-y-3">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="text-2xl flex-shrink-0">
+                    {event.random_events?.emoji || '🌿'}
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="font-medium text-sm text-gray-900 truncate">
+                        {event.random_events?.name || 'Unknown Event'}
+                      </h4>
+                      <Badge className={`text-xs ${getHealthBadgeColor(event.random_events?.health_impact)}`}>
+                        {event.random_events?.health_impact || 'neutral'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2">
+                      {event.random_events?.description || 'Something happened to your tree.'}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-blue-600">
+                        {formatEventChanges(event)}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {formatTimeAgo(event.occurred_at || '')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default TreeEventLog;
