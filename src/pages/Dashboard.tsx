@@ -1,24 +1,20 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { User } from "@supabase/supabase-js";
 import { Leaf, Droplet, Sun, Apple, Heart, Cog, Shield, Star, Target, Clock } from "lucide-react";
-import { Tables, Enums } from "@/integrations/supabase/types";
 import { toast } from "@/components/ui/sonner";
 import { AdminPanel } from "@/components/AdminPanel";
 import TreeGrowthStages from "@/components/TreeGrowthStages";
 import CelebrationModal from "@/components/CelebrationModal";
 import TreeEventLog from "@/components/TreeEventLog";
 import CurrentEvent from "@/components/CurrentEvent";
+import { api, session, Tree as ApiTree } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 
 // Extended types to include new functionality
-type TreeWithDetails = Tables<'trees'> & {
-  tree_species: Tables<'tree_species'> | null;
-  health?: 'thriving' | 'healthy' | 'struggling' | 'dying';
-};
+type TreeWithDetails = ApiTree & { health?: string };
 
 type CareActionCounts = {
   water: number;
@@ -30,7 +26,8 @@ type CareActionCounts = {
 const ADMIN_EMAIL = "renn.co@gmail.com";
 
 const Dashboard = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const user = session.getUser();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeWithDetails | null>(null);
   const [careActionCounts, setCareActionCounts] = useState<CareActionCounts>({
     water: 0,
@@ -44,72 +41,42 @@ const Dashboard = () => {
   const [showCelebration, setShowCelebration] = useState(false);
   const [treeUpdateKey, setTreeUpdateKey] = useState(0);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [roundProgress, setRoundProgress] = useState<{potential_points:number, counts:any}|null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-        setLoading(false);
-      }
-    };
-
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+    const me = session.getUser();
+    if (!session.getToken() || !me) {
+      navigate('/auth');
+      return;
+    }
+    setUserEmail(me.email);
+    setLoading(false);
   }, [navigate]);
 
   // Update user activity when component loads
   useEffect(() => {
-    if (user) {
+    if (userEmail) {
       updateUserActivity();
     }
-  }, [user]);
+  }, [userEmail]);
 
   const updateUserActivity = async () => {
-    if (!user) return;
+    if (!session.getToken()) return;
     
     try {
-      const { error } = await supabase
-        .from('trees')
-        .update({ last_user_activity: new Date().toISOString() })
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error("Error updating user activity:", error);
-      }
+      await api.updateUserActivity();
     } catch (error) {
       console.error("Error updating user activity:", error);
     }
   };
 
   const fetchTreeData = async () => {
-    if (!user) return null;
+  if (!session.getToken()) return null;
     
-    console.log("🌳 Fetching fresh tree data...");
-    const { data: treeData, error: treeError } = await supabase
-      .from('trees')
-      .select('*, tree_species(*)')
-      .eq('user_id', user.id)
-      .single();
-
-    if (treeError) {
-      console.error("❌ Error fetching tree:", treeError.message);
-      return null;
-    }
+  console.log("🌳 Fetching fresh tree data...");
+  const treeData = await api.getMyTree();
+  if (!treeData) return null;
 
     console.log("✅ Fresh tree data fetched:", {
       id: treeData.id,
@@ -126,8 +93,15 @@ const Dashboard = () => {
     return treeData;
   };
 
+  const refreshRoundProgress = async (treeId?: number) => {
+    try {
+      const rp = await api.getRoundProgress(treeId ?? (tree?.id || 0));
+      setRoundProgress({ potential_points: rp.potential_points, counts: rp.counts });
+    } catch {}
+  };
+
   const loadTreeAndCareData = async () => {
-    if (!user) return;
+  if (!session.getToken()) return;
     
     setLoading(true);
     
@@ -140,58 +114,43 @@ const Dashboard = () => {
       
       setTree(treeData);
       setTreeUpdateKey(prev => prev + 1);
+      await refreshRoundProgress(treeData.id);
 
       // Fetch care action counts since last evaluation
-      const { data: careLogsData } = await supabase
-        .from('care_logs')
-        .select('action_type')
-        .eq('tree_id', treeData.id)
-        .gte('created_at', treeData.last_evaluation || new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString());
+      // Fetch care action counts via events/logs is not implemented on backend; keep UI counts local-only per round
+      // Reset counts after reload
+      const counts: Partial<CareActionCounts> = {};
 
-      if (careLogsData) {
-        const counts = careLogsData.reduce((acc, log) => {
-          acc[log.action_type] = (acc[log.action_type] || 0) + 1;
-          return acc;
-        }, {} as Partial<CareActionCounts>);
-
-        setCareActionCounts({
-          water: counts.water || 0,
-          sunlight: counts.sunlight || 0,
-          feed: counts.feed || 0,
-          love: counts.love || 0
-        });
-      }
+      setCareActionCounts({
+        water: counts.water || 0,
+        sunlight: counts.sunlight || 0,
+        feed: counts.feed || 0,
+        love: counts.love || 0
+      });
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (user) {
+    if (session.getToken()) {
       loadTreeAndCareData();
     }
-  }, [user]);
+  }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+  await api.logout();
     navigate("/");
   };
 
-  const handleCareAction = async (action: Enums<'care_action'>) => {
+  const handleCareAction = async (action: 'water' | 'sunlight' | 'feed' | 'love') => {
     if (!tree) return;
     setIsCaring(true);
     try {
       // Update user activity first
       await updateUserActivity();
-      
-      const { error } = await supabase.from('care_logs').insert({
-        tree_id: tree.id,
-        action_type: action,
-      });
 
-      if (error) {
-        toast.error(`Failed to perform action: ${error.message}`);
-        throw error;
-      }
+      await api.postCare(action, tree.id);
+      await refreshRoundProgress(tree.id);
 
       // Update the local count immediately
       setCareActionCounts(prev => ({
@@ -343,7 +302,7 @@ const Dashboard = () => {
   };
 
   const runEvaluation = async () => {
-    if (!user || !tree || isEvaluating) return;
+    if (!tree || isEvaluating) return;
 
     setIsEvaluating(true);
 
@@ -360,15 +319,7 @@ const Dashboard = () => {
 
       // Call the database function with force_evaluation = true for manual evaluations
       console.log("📞 Calling evaluate_tree_growth function with force=true...");
-      const { error: functionError } = await supabase.rpc('evaluate_tree_growth', {
-        force_evaluation: true
-      });
-
-      if (functionError) {
-        console.error("❌ Error calling evaluate_tree_growth:", functionError);
-        toast.error(`Evaluation failed: ${functionError.message}`);
-        return;
-      }
+  const resp = await api.evaluate();
 
       console.log("✅ Database function completed");
 
@@ -376,14 +327,14 @@ const Dashboard = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Force refresh tree data from database multiple times to ensure we get the update
-      let updatedTreeData = null;
+  let updatedTreeData: TreeWithDetails | null = null;
       let attempts = 0;
       const maxAttempts = 5;
 
       while (!updatedTreeData && attempts < maxAttempts) {
         attempts++;
         console.log(`Attempt ${attempts} to fetch updated data...`);
-        updatedTreeData = await fetchTreeData();
+  updatedTreeData = await fetchTreeData();
 
         if (updatedTreeData && (
           updatedTreeData.growth_stage !== previousStage ||
@@ -411,11 +362,7 @@ const Dashboard = () => {
 
       // Force update the tree state and re-render everything
       setTree(updatedTreeData);
-      setTreeUpdateKey(prev => {
-        const nextKey = prev + 1;
-        console.log("🔁 treeUpdateKey incremented to", nextKey, "(after evaluation)");
-        return nextKey;
-      });
+      await refreshRoundProgress(updatedTreeData.id);
 
       // Reset care action counts for new round
       setCareActionCounts({
@@ -450,7 +397,7 @@ const Dashboard = () => {
     }
   };
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = userEmail === ADMIN_EMAIL;
   const inactivityWarning = getInactivityWarning();
 
   if (loading) {
@@ -474,7 +421,7 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-green-800">TendATree</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600 hidden sm:inline">Hello, {user?.email}</span>
+            <span className="text-sm text-gray-600 hidden sm:inline">Hello, {userEmail}</span>
             {isAdmin && (
               <Button variant="outline" size="icon" onClick={() => navigate("/super-admin")}>
                 <Shield className="h-4 w-4" />
@@ -734,8 +681,8 @@ const Dashboard = () => {
       <CelebrationModal 
         isOpen={showCelebration}
         onClose={() => setShowCelebration(false)}
-        treeName={tree?.tree_species?.name || 'Your Tree'}
-        userName={user?.email || 'Tree Tender'}
+  treeName={tree?.tree_species?.name || 'Your Tree'}
+  userName={userEmail || 'Tree Tender'}
       />
     </div>
   );

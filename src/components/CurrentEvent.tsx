@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tables } from "@/integrations/supabase/types";
-
-type TreeEvent = Tables<'tree_events'> & {
-  random_events: Tables<'random_events'> | null;
-};
+import { api, TreeEvent as ApiTreeEvent } from "@/lib/api";
 
 interface CurrentEventProps {
   treeId: string;
@@ -14,7 +9,7 @@ interface CurrentEventProps {
 }
 
 const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
-  const [currentEvent, setCurrentEvent] = useState<TreeEvent | null>(null);
+  const [currentEvent, setCurrentEvent] = useState<ApiTreeEvent | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,29 +18,8 @@ const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
       try {
         console.log("🎯 CurrentEvent: Fetching latest event for tree:", treeId, "refreshKey:", refreshKey);
         
-        // Get the most recent event for this tree
-        const { data, error } = await supabase
-          .from('tree_events')
-          .select(`
-            *,
-            random_events (*)
-          `)
-          .eq('tree_id', treeId)
-          .order('occurred_at', { ascending: false })
-          .limit(1);
-
-        if (error) {
-          console.error("❌ Error fetching latest event:", error);
-          return;
-        }
-
-        console.log("✅ Latest event data:", data);
-
-        if (data && data.length > 0) {
-          setCurrentEvent(data[0]);
-        } else {
-          setCurrentEvent(null);
-        }
+  const data = await api.getCurrentEvent(Number(treeId));
+  setCurrentEvent(data);
       } catch (error) {
         console.error("❌ Error fetching latest event:", error);
       } finally {
@@ -66,7 +40,7 @@ const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
     }
   };
 
-  const formatEventChanges = (event: TreeEvent) => {
+  const formatEventChanges = (event: ApiTreeEvent) => {
     const changes = [];
     if (event.water_change !== 0) {
       changes.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
@@ -97,19 +71,19 @@ const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
       <CardContent className="p-4">
         <div className="flex items-center space-x-3">
           <div className="text-3xl">
-            {currentEvent.random_events?.emoji || '🌿'}
+            {currentEvent.random_event?.emoji || '🌿'}
           </div>
           <div className="flex-grow">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-purple-900">
-                {currentEvent.random_events?.name || 'Weather Event'}
+                {currentEvent.random_event?.name || 'Weather Event'}
               </h3>
-              <Badge className={getHealthBadgeColor(currentEvent.random_events?.health_impact)}>
-                {currentEvent.random_events?.health_impact || 'neutral'}
+              <Badge className={getHealthBadgeColor(currentEvent.random_event?.health_impact || undefined)}>
+                {currentEvent.random_event?.health_impact || 'neutral'}
               </Badge>
             </div>
             <p className="text-sm text-purple-700 mb-2">
-              {currentEvent.random_events?.description || 'Something is happening to your tree!'}
+              {currentEvent.random_event?.description || 'Something is happening to your tree!'}
             </p>
             {hasEffects && (
               <div className="text-sm font-medium text-purple-800">

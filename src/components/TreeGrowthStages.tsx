@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Enums } from '@/integrations/supabase/types';
+import { GrowthStage } from '@/lib/api';
 
 interface TreeGrowthStagesProps {
-  currentStage: Enums<'growth_stage'>;
+  currentStage: GrowthStage;
   className?: string;
   refreshKey?: number; // Add refreshKey prop
 }

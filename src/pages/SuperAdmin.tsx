@@ -1,24 +1,20 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api, session } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tables } from "@/integrations/supabase/types";
 import { toast } from "@/components/ui/sonner";
 import { Leaf, ArrowLeft, Save, Shield, TestTube } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 import CelebrationModal from "@/components/CelebrationModal";
 
-type SpeciesWithParams = Tables<'tree_species'> & {
-  care_parameters: Tables<'care_parameters'> | null;
-};
+type SpeciesWithParams = { id: number; name: string; care_parameters: any };
 
 const ADMIN_EMAIL = "renn.co@gmail.com";
 
 const SuperAdmin = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [species, setSpecies] = useState<SpeciesWithParams[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,16 +24,15 @@ const SuperAdmin = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const me = session.getUser();
+      if (!me) {
         navigate("/auth");
         return;
       }
-
-      setUser(session.user);
+      setUserEmail(me.email || null);
       
       // Check if user is authorized admin
-      if (session.user.email === ADMIN_EMAIL) {
+      if (me.email === ADMIN_EMAIL) {
         setIsAuthorized(true);
       } else {
         toast.error("Access denied. You are not authorized to view this page.");
@@ -47,22 +42,7 @@ const SuperAdmin = () => {
     };
 
     checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-        if (session.user.email !== ADMIN_EMAIL) {
-          toast.error("Access denied. You are not authorized to view this page.");
-          navigate("/dashboard");
-        }
-      }
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+    // No realtime auth state in SQLite client yet
   }, [navigate]);
 
   useEffect(() => {
@@ -72,43 +52,8 @@ const SuperAdmin = () => {
         console.log("Fetching species data...");
         
         // First get all species
-        const { data: speciesData, error: speciesError } = await supabase
-          .from('tree_species')
-          .select('*');
-
-        if (speciesError) {
-          console.error("Error fetching species:", speciesError);
-          toast.error("Failed to load species data");
-          setLoading(false);
-          return;
-        }
-
-        // Then get care parameters for each species
-        const speciesWithParams: SpeciesWithParams[] = [];
-        
-        for (const spec of speciesData || []) {
-          const { data: paramsData, error: paramsError } = await supabase
-            .from('care_parameters')
-            .select('*')
-            .eq('species_id', spec.id)
-            .single();
-
-          if (paramsError) {
-            console.error(`Error fetching parameters for species ${spec.id}:`, paramsError);
-            speciesWithParams.push({
-              ...spec,
-              care_parameters: null
-            });
-          } else {
-            speciesWithParams.push({
-              ...spec,
-              care_parameters: paramsData
-            });
-          }
-        }
-
-        console.log("Fetched species with parameters:", speciesWithParams);
-        setSpecies(speciesWithParams);
+  const rows = await fetch('/api/tree_species').then(r=>r.json());
+  setSpecies(rows.map((r:any)=> ({ id: r.id, name: r.name, care_parameters: null })));
         setLoading(false);
       };
 
@@ -130,32 +75,9 @@ const SuperAdmin = () => {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      for (const spec of species) {
-        if (spec.care_parameters) {
-          const params = spec.care_parameters;
-          console.log(`Saving parameters for species ${spec.id}:`, params);
-          
-          const { error } = await supabase
-            .from('care_parameters')
-            .update({
-              min_water: params.min_water,
-              max_water: params.max_water,
-              min_sunlight: params.min_sunlight,
-              max_sunlight: params.max_sunlight,
-              min_feed: params.min_feed,
-              max_feed: params.max_feed,
-              min_love: params.min_love,
-              max_love: params.max_love,
-            })
-            .eq('id', params.id);
-
-          if (error) {
-            console.error(`Error saving parameters for species ${spec.id}:`, error);
-            throw error;
-          }
-        }
-      }
-      toast.success("All parameters saved successfully!");
+      // TODO: implement SQLite admin endpoints to save parameters
+      console.log('Save all params placeholder', species);
+      toast.success("Parameters save placeholder.");
     } catch (error) {
       console.error("Error saving parameters:", error);
       toast.error("Failed to save parameters");
@@ -167,12 +89,8 @@ const SuperAdmin = () => {
   const handleRunEvaluation = async () => {
     try {
       console.log("Running tree evaluation...");
-      const { error } = await supabase.functions.invoke('tree-evaluation');
-      if (error) {
-        console.error("Evaluation error:", error);
-        throw error;
-      }
-      toast.success("Tree evaluation completed!");
+  await fetch('/api/evaluate', { method: 'POST', headers: { 'Authorization': `Bearer ${session.getToken()}` } });
+  toast.success("Tree evaluation triggered!");
     } catch (error) {
       console.error("Error running evaluation:", error);
       toast.error("Failed to run evaluation");
@@ -375,7 +293,7 @@ const SuperAdmin = () => {
         isOpen={showCelebration}
         onClose={() => setShowCelebration(false)}
         treeName="Test Oak Tree"
-        userName={user?.user_metadata?.full_name || user?.email || "Tree Caretaker"}
+  userName={userEmail || "Tree Caretaker"}
       />
     </div>
   );

@@ -1,37 +1,47 @@
-
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { CareParametersForm } from "./CareParametersForm";
 import { Leaf } from "lucide-react";
 
-type SpeciesWithParams = Tables<'tree_species'> & {
-  care_parameters: Tables<'care_parameters'>[] | Tables<'care_parameters'> | null;
+type SpeciesWithParams = {
+  id: number;
+  name: string;
+  description?: string | null;
+  care_parameters: any;
 };
 
 export function AdminPanel() {
-  const [species, setSpecies] = useState<SpeciesWithParams[]>([]);
+  const [species, setSpecies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [params, setParams] = useState<Record<number, any>>({});
 
   useEffect(() => {
     const fetchSpecies = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('tree_species')
-        .select('*, care_parameters(*)');
-
-      if (error) {
-        console.error("Error fetching species:", error.message);
-      } else if (data) {
-        setSpecies(data as SpeciesWithParams[]);
+      try {
+        const rows = await fetch('/api/tree_species').then(r=>r.json());
+        setSpecies(rows);
+        // fetch params in parallel
+        const paramEntries = await Promise.all(rows.map(async (r:any)=> [r.id, await api.getSpeciesParams(r.id)] as const));
+        const map: Record<number, any> = {};
+        for (const [id, p] of paramEntries) map[id] = p;
+        setParams(map);
+      } catch (e) {
+        console.error('Error fetching species:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchSpecies();
   }, []);
+
+  const handleSave = async (id: number, payload: any) => {
+    const updated = await api.updateSpeciesParams(id, payload);
+    setParams(prev => ({ ...prev, [id]: updated }));
+  };
 
   if (loading) {
     return (
@@ -52,21 +62,18 @@ export function AdminPanel() {
           Adjust the ideal care conditions for each tree species. Values represent counts per 12-hour period.
         </p>
         <Accordion type="single" collapsible className="w-full">
-          {species.map((s) => {
-            const parameters = Array.isArray(s.care_parameters) ? s.care_parameters[0] : s.care_parameters;
-            return (
-              <AccordionItem value={s.name} key={s.id}>
-                <AccordionTrigger>{s.name}</AccordionTrigger>
-                <AccordionContent>
-                  {parameters ? (
-                    <CareParametersForm parameters={parameters} />
-                  ) : (
-                    <p className="text-red-500">No care parameters set for this species.</p>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
+          {species.map((s:any) => (
+            <AccordionItem value={String(s.id)} key={s.id}>
+              <AccordionTrigger>{s.name}</AccordionTrigger>
+              <AccordionContent>
+                {params[s.id] ? (
+                  <CareParametersForm parameters={params[s.id]} onSave={(payload)=>handleSave(s.id, payload)} />
+                ) : (
+                  <p className="text-gray-600 text-sm">Loading parameters...</p>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
         </Accordion>
       </CardContent>
     </Card>

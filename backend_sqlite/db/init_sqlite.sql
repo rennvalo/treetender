@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS tree_species (
   description TEXT,
   image_seedling TEXT,
   image_sprout TEXT,
-  image_sapling TEXT
+  image_sapling TEXT,
+  image_full_tree TEXT
 );
 
 CREATE TABLE IF NOT EXISTS trees (

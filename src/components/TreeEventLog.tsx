@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Tables } from "@/integrations/supabase/types";
-
-type TreeEvent = Tables<'tree_events'> & {
-  random_events: Tables<'random_events'> | null;
-};
+import { api, TreeEvent as ApiTreeEvent } from "@/lib/api";
 
 interface TreeEventLogProps {
   treeId: string;
@@ -15,7 +10,7 @@ interface TreeEventLogProps {
 }
 
 const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
-  const [events, setEvents] = useState<TreeEvent[]>([]);
+  const [events, setEvents] = useState<ApiTreeEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,23 +19,9 @@ const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
       try {
         console.log("📜 TreeEventLog: Fetching events for tree:", treeId, "refreshKey:", refreshKey);
         
-        const { data, error } = await supabase
-          .from('tree_events')
-          .select(`
-            *,
-            random_events (*)
-          `)
-          .eq('tree_id', treeId)
-          .order('occurred_at', { ascending: false })
-          .limit(10);
-
-        if (error) {
-          console.error("❌ Error fetching tree events:", error);
-          return;
-        }
-
-        console.log("✅ Tree events data:", data);
-        setEvents(data || []);
+  const data = await api.getTreeEvents(Number(treeId), 10);
+  console.log("✅ Tree events data:", data);
+  setEvents(data || []);
       } catch (error) {
         console.error("❌ Error fetching tree events:", error);
       } finally {
@@ -61,7 +42,7 @@ const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
     }
   };
 
-  const formatEventChanges = (event: TreeEvent) => {
+  const formatEventChanges = (event: ApiTreeEvent) => {
     const changes = [];
     if (event.water_change !== 0) {
       changes.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
@@ -122,19 +103,19 @@ const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
                   className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                 >
                   <div className="text-2xl flex-shrink-0">
-                    {event.random_events?.emoji || '🌿'}
+                    {event.random_event?.emoji || '🌿'}
                   </div>
                   <div className="flex-grow min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <h4 className="font-medium text-sm text-gray-900 truncate">
-                        {event.random_events?.name || 'Unknown Event'}
+                        {event.random_event?.name || 'Unknown Event'}
                       </h4>
-                      <Badge className={`text-xs ${getHealthBadgeColor(event.random_events?.health_impact)}`}>
-                        {event.random_events?.health_impact || 'neutral'}
+                      <Badge className={`text-xs ${getHealthBadgeColor(event.random_event?.health_impact || undefined)}`}>
+                        {event.random_event?.health_impact || 'neutral'}
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-600 mb-2">
-                      {event.random_events?.description || 'Something happened to your tree.'}
+                      {event.random_event?.description || 'Something happened to your tree.'}
                     </p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-blue-600">

@@ -1,4 +1,3 @@
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,8 +11,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Tables } from "@/integrations/supabase/types";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useState } from "react";
 
@@ -28,11 +25,15 @@ const formSchema = z.object({
   max_love: z.coerce.number().int().min(0),
 });
 
-type CareParametersFormProps = {
-  parameters: Tables<'care_parameters'>;
+export type CareParametersFormProps = {
+  parameters: any;
+  onSave?: (payload: any) => Promise<void>;
 };
 
-export function CareParametersForm({ parameters }: CareParametersFormProps) {
+export function CareParametersForm({
+  parameters,
+  onSave,
+}: CareParametersFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -50,34 +51,127 @@ export function CareParametersForm({ parameters }: CareParametersFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    const { error } = await supabase
-      .from("care_parameters")
-      .update(values)
-      .eq("id", parameters.id);
-
-    if (error) {
-      toast.error(`Failed to update parameters: ${error.message}`);
-    } else {
-      toast.success("Care parameters updated successfully!");
+    try {
+      if (onSave) await onSave(values);
+      toast.success("Care parameters saved.");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save parameters");
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <FormField control={form.control} name="min_water" render={({ field }) => ( <FormItem> <FormLabel>Min Water</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="max_water" render={({ field }) => ( <FormItem> <FormLabel>Max Water</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="min_sunlight" render={({ field }) => ( <FormItem> <FormLabel>Min Sunlight</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="max_sunlight" render={({ field }) => ( <FormItem> <FormLabel>Max Sunlight</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="min_feed" render={({ field }) => ( <FormItem> <FormLabel>Min Feed</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="max_feed" render={({ field }) => ( <FormItem> <FormLabel>Max Feed</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="min_love" render={({ field }) => ( <FormItem> <FormLabel>Min Love</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="max_love" render={({ field }) => ( <FormItem> <FormLabel>Max Love</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
+          <FormField
+            control={form.control}
+            name="min_water"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Water</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="max_water"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Water</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="min_sunlight"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Sunlight</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="max_sunlight"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Sunlight</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="min_feed"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Feed</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="max_feed"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Feed</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="min_love"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Love</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="max_love"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Love</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
         <Button type="submit" disabled={isSaving}>
-          {isSaving ? 'Saving...' : 'Save Changes'}
+          {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </form>
     </Form>

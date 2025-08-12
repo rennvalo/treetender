@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,15 +28,12 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password: loginPassword,
-    });
-    if (error) {
-      toast({ title: "Login Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await api.login(loginEmail, loginPassword);
       toast({ title: "Logged in successfully!" });
       navigate("/dashboard");
+    } catch (e:any) {
+      toast({ title: "Login Error", description: e.message, variant: "destructive" });
     }
     setLoginLoading(false);
   };
@@ -44,18 +41,12 @@ const Auth = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: signupEmail,
-      password: signupPassword,
-      options: {
-        data: { username: signupUsername },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    if (error) {
-      toast({ title: "Sign Up Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Success!", description: "Please check your email to confirm your account." });
+    try {
+      await api.register(signupEmail, signupPassword, signupUsername);
+      toast({ title: "Account created", description: "You are now logged in." });
+      navigate("/dashboard");
+    } catch (e:any) {
+      toast({ title: "Sign Up Error", description: e.message, variant: "destructive" });
     }
     setSignupLoading(false);
   };
