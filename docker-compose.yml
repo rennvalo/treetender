@@ -8,3 +8,10 @@ services:
       - ./backend_sqlite/data:/app/backend_sqlite/data
     environment:
       - NODE_ENV=production
+    networks:
+      - frontend  # Same network as Nginx Proxy Manager
+    restart: always
+
+networks:
+  frontend:
+    external: true  # Ensure this matches an existing external network
