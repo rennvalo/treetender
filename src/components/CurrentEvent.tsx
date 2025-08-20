@@ -42,16 +42,16 @@ const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
 
   const formatEventChanges = (event: ApiTreeEvent) => {
     const changes = [];
-    if (event.water_change !== 0) {
+    if (typeof event.water_change === 'number' && event.water_change !== 0) {
       changes.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
     }
-    if (event.sunlight_change !== 0) {
+    if (typeof event.sunlight_change === 'number' && event.sunlight_change !== 0) {
       changes.push(`☀️ ${event.sunlight_change > 0 ? '+' : ''}${event.sunlight_change}`);
     }
-    if (event.feed_change !== 0) {
+    if (typeof event.feed_change === 'number' && event.feed_change !== 0) {
       changes.push(`🍎 ${event.feed_change > 0 ? '+' : ''}${event.feed_change}`);
     }
-    if (event.love_change !== 0) {
+    if (typeof event.love_change === 'number' && event.love_change !== 0) {
       changes.push(`❤️ ${event.love_change > 0 ? '+' : ''}${event.love_change}`);
     }
     return changes.join(' ');
@@ -76,14 +76,14 @@ const CurrentEvent = ({ treeId, refreshKey }: CurrentEventProps) => {
           <div className="flex-grow">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-purple-900">
-                {currentEvent.random_event?.name || 'Weather Event'}
+                {currentEvent.random_event?.name || currentEvent.event_type || 'Event'}
               </h3>
               <Badge className={getHealthBadgeColor(currentEvent.random_event?.health_impact || undefined)}>
                 {currentEvent.random_event?.health_impact || 'neutral'}
               </Badge>
             </div>
             <p className="text-sm text-purple-700 mb-2">
-              {currentEvent.random_event?.description || 'Something is happening to your tree!'}
+              {currentEvent.random_event?.description || currentEvent.description || 'Something happened to your tree.'}
             </p>
             {hasEffects && (
               <div className="text-sm font-medium text-purple-800">

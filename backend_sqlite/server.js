@@ -1,3 +1,5 @@
+// Load random events
+const randomEvents = require('./db/random_events.js');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -334,6 +336,11 @@ app.get('/api/current-event', authMiddleware, async (req, res) => {
     const treeId = Number(req.query.tree_id);
     if (!treeId) return res.status(400).json({ error: 'tree_id required' });
     const ev = await getAsync('SELECT * FROM tree_events WHERE tree_id = ? ORDER BY created_at DESC LIMIT 1', [treeId]);
+    if (ev && ev.metadata) {
+      try {
+        ev.random_event = JSON.parse(ev.metadata);
+      } catch {}
+    }
     res.json(ev || null);
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
@@ -345,6 +352,13 @@ app.get('/api/tree-events', authMiddleware, async (req, res) => {
     const limit = Number(req.query.limit) || 10;
     if (!treeId) return res.status(400).json({ error: 'tree_id required' });
     const rows = await allAsync('SELECT * FROM tree_events WHERE tree_id = ? ORDER BY created_at DESC LIMIT ?', [treeId, limit]);
+    for (const ev of rows) {
+      if (ev && ev.metadata) {
+        try {
+          ev.random_event = JSON.parse(ev.metadata);
+        } catch {}
+      }
+    }
     res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
@@ -458,13 +472,66 @@ if (fs.existsSync(staticPath)) {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-// Auto-evaluate every 12 hours to persist points/stages
-const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+// Auto-evaluate every 5 minutes to persist points/stages and trigger random events
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 setInterval(async () => {
   try {
     const n = await evaluateAllTrees('auto');
-    console.log(`[auto-evaluate] processed ${n} trees at ${new Date().toISOString()}`);
+    // After evaluation, trigger a random event for each tree
+    const treeRows = await new Promise((resolve, reject) => {
+      db.all('SELECT id FROM trees', (err, rows) => {
+        if (err) reject(err); else resolve(rows);
+      });
+    });
+    for (const tree of treeRows) {
+      const event = randomEvents[Math.floor(Math.random() * randomEvents.length)];
+      // Get current growth points
+      const treeRow = await new Promise((resolve, reject) => {
+        db.get('SELECT metadata FROM trees WHERE id = ?', [tree.id], (err, row) => {
+          if (err) reject(err); else resolve(row);
+        });
+      });
+      let meta = {};
+      try { meta = JSON.parse(treeRow.metadata || '{}'); } catch {}
+      let points = meta.growth_points || 0;
+      let pointChange = 0;
+  if (event.health_impact === 'positive') pointChange = 5;
+  if (event.health_impact === 'negative') pointChange = -5;
+  if (event.health_impact === 'neutral') pointChange = 0;
+      points = Math.max(0, points + pointChange);
+      meta.growth_points = points;
+      // Update tree points
+      await new Promise((resolve, reject) => {
+        db.run('UPDATE trees SET metadata = ? WHERE id = ?', [JSON.stringify(meta), tree.id], (err) => {
+          if (err) reject(err); else resolve();
+        });
+      });
+      // Insert event with point change in description
+      const desc = `${event.description} ${pointChange >= 0 ? '+' : ''}${pointChange} points.`;
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO tree_events (tree_id, event_type, description, created_at, metadata) VALUES (?,?,?,?,?)',
+          [
+            tree.id,
+            event.name,
+            desc,
+            Math.floor(Date.now()/1000),
+            JSON.stringify({
+              emoji: event.emoji,
+              health_impact: event.health_impact,
+              water_modifier: event.water_modifier || 0,
+              sunlight_modifier: event.sunlight_modifier || 0,
+              feed_modifier: event.feed_modifier || 0,
+              love_modifier: event.love_modifier || 0,
+              point_change: pointChange
+            })
+          ],
+          (err) => { if (err) reject(err); else resolve(); }
+        );
+      });
+    }
+    console.log(`[auto-evaluate] processed ${n} trees and triggered random events at ${new Date().toISOString()}`);
   } catch (e) {
     console.warn('[auto-evaluate] failed:', e.message);
   }
-}, TWELVE_HOURS_MS);
+}, FIVE_MINUTES_MS);
