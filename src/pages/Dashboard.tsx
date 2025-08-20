@@ -440,10 +440,7 @@ const Dashboard = () => {
         {tree && tree.tree_species ? (
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-2 space-y-6">
-              {/* DEBUG: Show treeUpdateKey */}
-              <div className="text-xs mb-1 text-gray-500 italic">
-                DEBUG: treeUpdateKey is {treeUpdateKey}
-              </div>
+              {/* ...existing code... */}
               {inactivityWarning && (
                 <Card className="border-yellow-200 bg-yellow-50">
                   <CardHeader>
@@ -639,10 +636,7 @@ const Dashboard = () => {
               </Card>
             </div>
             <div className="space-y-6">
-              {/* DEBUG: Show treeUpdateKey */}
-              <div className="text-xs mb-1 text-gray-500 italic">
-                DEBUG: treeUpdateKey is {treeUpdateKey}
-              </div>
+              {/* ...existing code... */}
               {/* Care Actions Card */}
               <Card>
                 <CardHeader>
