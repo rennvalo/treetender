@@ -43,20 +43,24 @@ const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
   };
 
   const formatEventChanges = (event: ApiTreeEvent) => {
-    const changes = [];
-    if (event.water_change !== 0) {
-      changes.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
+    const parts: string[] = [];
+    // Show point change first if present and non-zero
+    if (typeof event.point_change === 'number' && event.point_change !== 0) {
+      parts.push(`${event.point_change > 0 ? '+' : ''}${event.point_change} pts`);
     }
-    if (event.sunlight_change !== 0) {
-      changes.push(`☀️ ${event.sunlight_change > 0 ? '+' : ''}${event.sunlight_change}`);
+    if (typeof event.water_change === 'number' && event.water_change !== 0) {
+      parts.push(`💧 ${event.water_change > 0 ? '+' : ''}${event.water_change}`);
     }
-    if (event.feed_change !== 0) {
-      changes.push(`🍎 ${event.feed_change > 0 ? '+' : ''}${event.feed_change}`);
+    if (typeof event.sunlight_change === 'number' && event.sunlight_change !== 0) {
+      parts.push(`☀️ ${event.sunlight_change > 0 ? '+' : ''}${event.sunlight_change}`);
     }
-    if (event.love_change !== 0) {
-      changes.push(`❤️ ${event.love_change > 0 ? '+' : ''}${event.love_change}`);
+    if (typeof event.feed_change === 'number' && event.feed_change !== 0) {
+      parts.push(`🍎 ${event.feed_change > 0 ? '+' : ''}${event.feed_change}`);
     }
-    return changes.join(' ');
+    if (typeof event.love_change === 'number' && event.love_change !== 0) {
+      parts.push(`❤️ ${event.love_change > 0 ? '+' : ''}${event.love_change}`);
+    }
+    return parts.join(' ');
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -108,21 +112,21 @@ const TreeEventLog = ({ treeId, refreshKey }: TreeEventLogProps) => {
                   <div className="flex-grow min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <h4 className="font-medium text-sm text-gray-900 truncate">
-                        {event.random_event?.name || 'Unknown Event'}
+                        {event.random_event?.name || event.event_type || 'Unknown Event'}
                       </h4>
                       <Badge className={`text-xs ${getHealthBadgeColor(event.random_event?.health_impact || undefined)}`}>
                         {event.random_event?.health_impact || 'neutral'}
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-600 mb-2">
-                      {event.random_event?.description || 'Something happened to your tree.'}
+                      {event.random_event?.description || event.description || 'Something happened to your tree.'}
                     </p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-blue-600">
                         {formatEventChanges(event)}
                       </span>
                       <span className="text-xs text-gray-400">
-                        {formatTimeAgo(event.occurred_at || '')}
+                        {event.occurred_at ? formatTimeAgo(event.occurred_at) : ''}
                       </span>
                     </div>
                   </div>

@@ -62,6 +62,8 @@ export type TreeEvent = {
   sunlight_change?: number | null;
   feed_change?: number | null;
   love_change?: number | null;
+  point_change?: number | null;
+  occurred_at?: string | null;
 };
 
 const TOKEN_KEY = 'tt_token';

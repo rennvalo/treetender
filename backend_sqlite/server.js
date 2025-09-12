@@ -338,7 +338,15 @@ app.get('/api/current-event', authMiddleware, async (req, res) => {
     const ev = await getAsync('SELECT * FROM tree_events WHERE tree_id = ? ORDER BY created_at DESC LIMIT 1', [treeId]);
     if (ev && ev.metadata) {
       try {
-        ev.random_event = JSON.parse(ev.metadata);
+        const md = JSON.parse(ev.metadata || '{}');
+        ev.random_event = md;
+        // set top-level change fields expected by frontend
+        ev.water_change = typeof md.water_modifier === 'number' ? md.water_modifier : (md.water_change ?? null);
+        ev.sunlight_change = typeof md.sunlight_modifier === 'number' ? md.sunlight_modifier : (md.sunlight_change ?? null);
+        ev.feed_change = typeof md.feed_modifier === 'number' ? md.feed_modifier : (md.feed_change ?? null);
+        ev.love_change = typeof md.love_modifier === 'number' ? md.love_modifier : (md.love_change ?? null);
+        ev.point_change = typeof md.point_change === 'number' ? md.point_change : (md.point_change ?? 0);
+        ev.occurred_at = ev.created_at ? new Date(ev.created_at * 1000).toISOString() : null;
       } catch {}
     }
     res.json(ev || null);
@@ -355,11 +363,46 @@ app.get('/api/tree-events', authMiddleware, async (req, res) => {
     for (const ev of rows) {
       if (ev && ev.metadata) {
         try {
-          ev.random_event = JSON.parse(ev.metadata);
+          const md = JSON.parse(ev.metadata || '{}');
+          ev.random_event = md;
+          ev.water_change = typeof md.water_modifier === 'number' ? md.water_modifier : (md.water_change ?? null);
+          ev.sunlight_change = typeof md.sunlight_modifier === 'number' ? md.sunlight_modifier : (md.sunlight_change ?? null);
+          ev.feed_change = typeof md.feed_modifier === 'number' ? md.feed_modifier : (md.feed_change ?? null);
+          ev.love_change = typeof md.love_modifier === 'number' ? md.love_modifier : (md.love_change ?? null);
+          ev.point_change = typeof md.point_change === 'number' ? md.point_change : (md.point_change ?? 0);
+          ev.occurred_at = ev.created_at ? new Date(ev.created_at * 1000).toISOString() : null;
         } catch {}
       }
     }
     res.json(rows);
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// DEBUG: return raw and parsed events for inspection
+app.get('/api/debug-tree-events', authMiddleware, async (req, res) => {
+  try {
+    const treeId = Number(req.query.tree_id);
+    const limit = Number(req.query.limit) || 20;
+    if (!treeId) return res.status(400).json({ error: 'tree_id required' });
+    const rows = await allAsync('SELECT * FROM tree_events WHERE tree_id = ? ORDER BY created_at DESC LIMIT ?', [treeId, limit]);
+    const parsed = rows.map(ev => {
+      const out = { raw: ev };
+      if (ev && ev.metadata) {
+        try {
+          const md = JSON.parse(ev.metadata || '{}');
+          out.parsed = md;
+          out.water_change = typeof md.water_modifier === 'number' ? md.water_modifier : (md.water_change ?? null);
+          out.sunlight_change = typeof md.sunlight_modifier === 'number' ? md.sunlight_modifier : (md.sunlight_change ?? null);
+          out.feed_change = typeof md.feed_modifier === 'number' ? md.feed_modifier : (md.feed_change ?? null);
+          out.love_change = typeof md.love_modifier === 'number' ? md.love_modifier : (md.love_change ?? null);
+          out.point_change = typeof md.point_change === 'number' ? md.point_change : (md.point_change ?? 0);
+        } catch (e) {
+          out.parsed = null;
+        }
+      }
+      return out;
+    });
+    res.json({ count: rows.length, rows: parsed });
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
@@ -518,6 +561,8 @@ setInterval(async () => {
             Math.floor(Date.now()/1000),
             JSON.stringify({
               emoji: event.emoji,
+              name: event.name,
+              description: event.description,
               health_impact: event.health_impact,
               water_modifier: event.water_modifier || 0,
               sunlight_modifier: event.sunlight_modifier || 0,
