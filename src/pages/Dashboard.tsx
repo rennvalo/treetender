@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Leaf, Droplet, Sun, Apple, Heart, Cog, Shield, Star, Target, Clock } from "lucide-react";
+import { Leaf, Droplet, Sun, Apple, Heart, Cog, Shield, Star, Target, Clock, Plus } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { AdminPanel } from "@/components/AdminPanel";
 import TreeGrowthStages from "@/components/TreeGrowthStages";
 import CelebrationModal from "@/components/CelebrationModal";
 import TreeEventLog from "@/components/TreeEventLog";
 import CurrentEvent from "@/components/CurrentEvent";
+import TreeGrove from "@/components/TreeGrove";
 import { api, session, Tree as ApiTree } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,7 +29,8 @@ const ADMIN_EMAIL = "renn.co@gmail.com";
 const Dashboard = () => {
   const user = session.getUser();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [tree, setTree] = useState<TreeWithDetails | null>(null);
+  const [trees, setTrees] = useState<ApiTree[]>([]);
+  const [currentTree, setCurrentTree] = useState<ApiTree | null>(null);
   const [careActionCounts, setCareActionCounts] = useState<CareActionCounts>({
     water: 0,
     sunlight: 0,
@@ -95,7 +97,7 @@ const Dashboard = () => {
 
   const refreshRoundProgress = async (treeId?: number) => {
     try {
-      const rp = await api.getRoundProgress(treeId ?? (tree?.id || 0));
+      const rp = await api.getRoundProgress(treeId ?? (currentTree?.id || 0));
       setRoundProgress({ potential_points: rp.potential_points, counts: rp.counts });
     } catch {}
   };
@@ -105,14 +107,19 @@ const Dashboard = () => {
     
     setLoading(true);
     
-    const treeData = await fetchTreeData();
+    // Load all trees for the user
+    const allTrees = await api.getMyTrees();
+    setTrees(allTrees);
+    
+    // Set current tree to the most recent one or the first one
+    const treeData = allTrees.length > 0 ? allTrees[0] : null;
     if (treeData) {
-      console.log("🔄 Setting tree state with:", {
+      console.log("🔄 Setting current tree with:", {
         stage: treeData.growth_stage,
         points: treeData.growth_points
       });
       
-      setTree(treeData);
+      setCurrentTree(treeData);
       setTreeUpdateKey(prev => prev + 1);
       await refreshRoundProgress(treeData.id);
 
@@ -143,14 +150,14 @@ const Dashboard = () => {
   };
 
   const handleCareAction = async (action: 'water' | 'sunlight' | 'feed' | 'love') => {
-    if (!tree) return;
+    if (!currentTree) return;
     setIsCaring(true);
     try {
       // Update user activity first
       await updateUserActivity();
 
-      await api.postCare(action, tree.id);
-      await refreshRoundProgress(tree.id);
+      await api.postCare(action, currentTree.id);
+      await refreshRoundProgress(currentTree.id);
 
       // Update the local count immediately
       setCareActionCounts(prev => ({
@@ -214,33 +221,33 @@ const Dashboard = () => {
   };
 
   const calculateCurrentPoints = () => {
-    if (!tree) return 0;
+    if (!currentTree) return 0;
     
     let points = 0;
     
     // Water points - 25 if exact match, otherwise 1 per action
-    if (careActionCounts.water === (tree.target_water || 0)) {
+    if (careActionCounts.water === (currentTree.target_water || 0)) {
       points += 25;
     } else {
       points += careActionCounts.water;
     }
     
     // Sunlight points
-    if (careActionCounts.sunlight === (tree.target_sunlight || 0)) {
+    if (careActionCounts.sunlight === (currentTree.target_sunlight || 0)) {
       points += 25;
     } else {
       points += careActionCounts.sunlight;
     }
     
     // Feed points
-    if (careActionCounts.feed === (tree.target_feed || 0)) {
+    if (careActionCounts.feed === (currentTree.target_feed || 0)) {
       points += 25;
     } else {
       points += careActionCounts.feed;
     }
     
     // Love points
-    if (careActionCounts.love === (tree.target_love || 0)) {
+    if (careActionCounts.love === (currentTree.target_love || 0)) {
       points += 25;
     } else {
       points += careActionCounts.love;
@@ -250,26 +257,26 @@ const Dashboard = () => {
   };
 
   const isTargetHit = (action: string, count: number) => {
-    if (!tree) return false;
+    if (!currentTree) return false;
     
     switch (action) {
-      case 'water': return count === (tree.target_water || 0);
-      case 'sunlight': return count === (tree.target_sunlight || 0);
-      case 'feed': return count === (tree.target_feed || 0);
-      case 'love': return count === (tree.target_love || 0);
+      case 'water': return count === (currentTree.target_water || 0);
+      case 'sunlight': return count === (currentTree.target_sunlight || 0);
+      case 'feed': return count === (currentTree.target_feed || 0);
+      case 'love': return count === (currentTree.target_love || 0);
       default: return false;
     }
   };
 
   const getTargetRange = (action: string) => {
-    if (!tree) return "1-15";
+    if (!currentTree) return "1-15";
     
     const target = (() => {
       switch (action) {
-        case 'water': return tree.target_water || 0;
-        case 'sunlight': return tree.target_sunlight || 0;
-        case 'feed': return tree.target_feed || 0;
-        case 'love': return tree.target_love || 0;
+        case 'water': return currentTree.target_water || 0;
+        case 'sunlight': return currentTree.target_sunlight || 0;
+        case 'feed': return currentTree.target_feed || 0;
+        case 'love': return currentTree.target_love || 0;
         default: return 0;
       }
     })();
@@ -282,9 +289,9 @@ const Dashboard = () => {
   };
 
   const getInactivityWarning = () => {
-    if (!tree?.last_user_activity) return null;
+    if (!currentTree?.last_user_activity) return null;
     
-    const lastActivity = new Date(tree.last_user_activity);
+    const lastActivity = new Date(currentTree.last_user_activity);
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
     
     if (lastActivity < twelveHoursAgo) {
@@ -294,7 +301,7 @@ const Dashboard = () => {
       
       return {
         hoursInactive,
-        potentialPenalty: Math.min(potentialPenalty, tree.growth_points || 0)
+        potentialPenalty: Math.min(potentialPenalty, currentTree.growth_points || 0)
       };
     }
     
@@ -302,17 +309,17 @@ const Dashboard = () => {
   };
 
   const runEvaluation = async () => {
-    if (!tree || isEvaluating) return;
+    if (!currentTree || isEvaluating) return;
 
     setIsEvaluating(true);
 
     try {
       console.log("🚀 Starting MANUAL tree evaluation...");
-      console.log("📊 Before evaluation - Stage:", tree.growth_stage, "Points:", tree.growth_points);
+      console.log("📊 Before evaluation - Stage:", currentTree.growth_stage, "Points:", currentTree.growth_points);
 
       // Store current stage for comparison
-      const previousStage = tree.growth_stage;
-      const previousPoints = tree.growth_points || 0;
+      const previousStage = currentTree.growth_stage;
+      const previousPoints = currentTree.growth_points || 0;
 
       // Update user activity before evaluation
       await updateUserActivity();
@@ -327,7 +334,7 @@ const Dashboard = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Force refresh tree data from database multiple times to ensure we get the update
-  let updatedTreeData: TreeWithDetails | null = null;
+  let updatedTreeData: ApiTree | null = null;
       let attempts = 0;
       const maxAttempts = 5;
 
@@ -360,8 +367,11 @@ const Dashboard = () => {
         previousPoints
       });
 
-      // Force update the tree state and re-render everything
-      setTree(updatedTreeData);
+      // Update the current tree in the trees array
+      setTrees(prevTrees => 
+        prevTrees.map(t => t.id === currentTree.id ? updatedTreeData! : t)
+      );
+      setCurrentTree(updatedTreeData);
       await refreshRoundProgress(updatedTreeData.id);
 
       // Reset care action counts for new round
@@ -397,6 +407,41 @@ const Dashboard = () => {
     }
   };
 
+  const handleTreeSelect = (treeId: number) => {
+    const selectedTree = trees.find(t => t.id === treeId);
+    if (selectedTree) {
+      setCurrentTree(selectedTree);
+      setTreeUpdateKey(prev => prev + 1);
+      // Reset care counts when switching trees
+      setCareActionCounts({
+        water: 0,
+        sunlight: 0,
+        feed: 0,
+        love: 0
+      });
+      toast.success(`Switched to ${selectedTree.tree_species?.name || 'your tree'}!`);
+    }
+  };
+
+  const handleCreateNewTree = async () => {
+    try {
+      const newTree = await api.createNewTree();
+      setTrees(prevTrees => [newTree, ...prevTrees]);
+      setCurrentTree(newTree);
+      setTreeUpdateKey(prev => prev + 1);
+      setCareActionCounts({
+        water: 0,
+        sunlight: 0,
+        feed: 0,
+        love: 0
+      });
+      toast.success(`🌱 New ${newTree.tree_species?.name || 'tree'} planted! Start nurturing it!`);
+    } catch (error) {
+      console.error('Error creating new tree:', error);
+      toast.error('Failed to plant a new tree');
+    }
+  };
+
   const isAdmin = userEmail === ADMIN_EMAIL;
   const inactivityWarning = getInactivityWarning();
 
@@ -409,7 +454,7 @@ const Dashboard = () => {
   }
 
   const currentPoints = calculateCurrentPoints();
-  const totalPoints = (tree?.growth_points || 0) + currentPoints;
+  const totalPoints = (currentTree?.growth_points || 0) + currentPoints;
   const progressPercentage = Math.min((totalPoints / 100) * 100, 100);
 
   return (
@@ -437,10 +482,30 @@ const Dashboard = () => {
         </div>
       </header>
       <main className="flex-grow container mx-auto p-6 md:p-12">
-        {tree && tree.tree_species ? (
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-2 space-y-6">
-              {/* ...existing code... */}
+        {currentTree && currentTree.tree_species ? (
+          <div className="flex gap-8">
+            <div className="flex-1 space-y-6">
+              {/* New Tree Button - only show if current tree is full grown */}
+              {currentTree.growth_stage === 'full_tree' && (
+                <Card className="border-green-200 bg-green-50">
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold text-green-800 mb-2">🌟 Congratulations!</h3>
+                      <p className="text-green-700 mb-4">
+                        Your tree has reached full growth! Ready to start a new adventure?
+                      </p>
+                      <Button 
+                        onClick={handleCreateNewTree}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Plant a New Tree
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {inactivityWarning && (
                 <Card className="border-yellow-200 bg-yellow-50">
                   <CardHeader>
@@ -460,27 +525,27 @@ const Dashboard = () => {
               )}
 
               {/* Current Event Display - Pass refreshKey to force updates */}
-              <CurrentEvent treeId={tree.id} refreshKey={treeUpdateKey} />
+              {currentTree && <CurrentEvent treeId={String(currentTree.id)} refreshKey={treeUpdateKey} />}
 
               <Card className="w-full">
                 <CardHeader>
                   <CardTitle className="text-3xl text-green-800 flex items-center justify-between">
-                    {tree.tree_species.name}
+                    {currentTree.tree_species.name}
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-1">
                         <Star className="h-5 w-5 text-yellow-500" />
                         <span className="text-lg font-bold text-yellow-600">{totalPoints}/100</span>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getHealthColor(tree.health || 'healthy')}`}>
-                        {tree.health || 'healthy'}
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getHealthColor(currentTree.health || 'healthy')}`}>
+                        {currentTree.health || 'healthy'}
                       </span>
                     </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <img 
-                    src={getTreeImageUrl(tree)} 
-                    alt={tree.tree_species.name || 'Your tree'}
+                    src={getTreeImageUrl(currentTree)} 
+                    alt={currentTree.tree_species.name || 'Your tree'}
                     className="rounded-lg shadow-lg w-full max-h-[500px] object-cover"
                     onError={(e) => {
                       console.error("Image failed to load:", e.currentTarget.src);
@@ -488,7 +553,7 @@ const Dashboard = () => {
                     }}
                   />
                   <div className="mt-4 space-y-2">
-                    <p className="text-gray-600 capitalize">Current stage: <span className="font-semibold">{tree.growth_stage}</span></p>
+                    <p className="text-gray-600 capitalize">Current stage: <span className="font-semibold">{currentTree.growth_stage}</span></p>
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
                         <span>Growth Progress</span>
@@ -504,7 +569,7 @@ const Dashboard = () => {
               </Card>
               
               <TreeGrowthStages 
-                currentStage={tree.growth_stage} 
+                currentStage={currentTree.growth_stage} 
                 refreshKey={treeUpdateKey}
               />
 
@@ -635,8 +700,7 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
             </div>
-            <div className="space-y-6">
-              {/* ...existing code... */}
+            <div className="w-80 space-y-6 flex-shrink-0">
               {/* Care Actions Card */}
               <Card>
                 <CardHeader>
@@ -658,8 +722,15 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
 
+              {/* Tree Grove Display */}
+              <TreeGrove 
+                trees={trees} 
+                currentTreeId={currentTree.id} 
+                onTreeSelect={handleTreeSelect} 
+              />
+
               {/* Tree Event Log - Pass refreshKey to force updates */}
-              <TreeEventLog treeId={tree.id} refreshKey={treeUpdateKey} />
+              {currentTree && <TreeEventLog treeId={String(currentTree.id)} refreshKey={treeUpdateKey} />}
             </div>
           </div>
         ) : (
@@ -675,8 +746,9 @@ const Dashboard = () => {
       <CelebrationModal 
         isOpen={showCelebration}
         onClose={() => setShowCelebration(false)}
-  treeName={tree?.tree_species?.name || 'Your Tree'}
+  treeName={currentTree?.tree_species?.name || 'Your Tree'}
   userName={userEmail || 'Tree Tender'}
+  onPlantNewTree={handleCreateNewTree}
       />
     </div>
   );

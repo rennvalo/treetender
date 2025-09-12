@@ -1,3 +1,4 @@
+backend_sqlite/data/app.db
 # Logs
 logs
 *.log

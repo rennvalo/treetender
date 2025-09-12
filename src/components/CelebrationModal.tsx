@@ -11,13 +11,15 @@ interface CelebrationModalProps {
   onClose: () => void;
   treeName: string;
   userName: string;
+  onPlantNewTree?: () => void;
 }
 
 const CelebrationModal: React.FC<CelebrationModalProps> = ({
   isOpen,
   onClose,
   treeName,
-  userName
+  userName,
+  onPlantNewTree
 }) => {
   const [showCertificate, setShowCertificate] = useState(false);
 
@@ -76,6 +78,18 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({
                     <Award className="mr-2 h-5 w-5" />
                     View Certificate
                   </Button>
+                  
+                  {onPlantNewTree && (
+                    <Button 
+                      onClick={() => {
+                        onPlantNewTree();
+                        onClose();
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+                    >
+                      🌱 Plant New Tree
+                    </Button>
+                  )}
                   
                   <Button 
                     variant="outline" 

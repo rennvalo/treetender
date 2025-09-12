@@ -293,6 +293,103 @@ app.get('/api/my-tree', authMiddleware, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
+// Return all trees for current user (joined with species)
+app.get('/api/my-trees', authMiddleware, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const trees = await allAsync('SELECT * FROM trees WHERE owner = ? ORDER BY id DESC', [email]);
+    if (!trees || trees.length === 0) return res.json([]);
+
+    // Get all species in one query for efficiency
+    const speciesIds = [...new Set(trees.map(t => t.species_id))];
+    const speciesRows = await allAsync(`SELECT * FROM tree_species WHERE id IN (${speciesIds.map(() => '?').join(',')})`, speciesIds);
+    const speciesMap = {};
+    speciesRows.forEach(s => speciesMap[s.id] = s);
+
+    const mappedTrees = trees.map(tree => {
+      const species = speciesMap[tree.species_id] || null;
+      let meta = {};
+      try { meta = JSON.parse(tree.metadata || '{}'); } catch {}
+      const targets = meta.targets || {};
+      return {
+        ...tree,
+        growth_points: meta.growth_points ?? 0,
+        last_evaluation: meta.last_evaluation ? new Date(meta.last_evaluation).toISOString() : null,
+        last_user_activity: meta.last_user_activity ? new Date(meta.last_user_activity).toISOString() : null,
+        target_water: targets.water ?? null,
+        target_sunlight: targets.sunlight ?? null,
+        target_feed: targets.feed ?? null,
+        target_love: targets.love ?? null,
+        health: meta.health || 'healthy',
+        tree_species: species,
+      };
+    });
+
+    res.json(mappedTrees);
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// Create a new tree for current user
+app.post('/api/my-trees', authMiddleware, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const { species_id } = req.body || {};
+
+    // Use provided species_id or default to Oak
+    let speciesId = species_id;
+    if (!speciesId) {
+      const defaultSpecies = await getAsync(`SELECT id FROM tree_species WHERE name = ?`, ['Oak']);
+      if (!defaultSpecies) {
+        return res.status(500).json({ error: 'Default species not found' });
+      }
+      speciesId = defaultSpecies.id;
+    }
+
+    // Initialize metadata for new tree
+    const initMeta = JSON.stringify({
+      user_id: req.user.sub,
+      last_user_activity: Date.now(),
+      last_evaluation: Date.now(),
+      growth_points: 0,
+      targets: {
+        water: Math.floor(Math.random()*15)+1,
+        sunlight: Math.floor(Math.random()*15)+1,
+        feed: Math.floor(Math.random()*15)+1,
+        love: Math.floor(Math.random()*15)+1,
+      },
+      health: 'healthy'
+    });
+
+    const info = await runAsync(
+      `INSERT INTO trees (owner, species_id, growth_stage, metadata)
+       VALUES (?, ?, ?, ?)`,
+      [email, speciesId, 'seedling', initMeta]
+    );
+
+    // Fetch the newly created tree
+    const newTree = await getAsync('SELECT * FROM trees WHERE id = ?', [info.lastID]);
+    const species = await getAsync('SELECT * FROM tree_species WHERE id = ?', [newTree.species_id]);
+
+    let meta = {};
+    try { meta = JSON.parse(newTree.metadata || '{}'); } catch {}
+    const targets = meta.targets || {};
+    const mapped = {
+      ...newTree,
+      growth_points: meta.growth_points ?? 0,
+      last_evaluation: meta.last_evaluation ? new Date(meta.last_evaluation).toISOString() : null,
+      last_user_activity: meta.last_user_activity ? new Date(meta.last_user_activity).toISOString() : null,
+      target_water: targets.water ?? null,
+      target_sunlight: targets.sunlight ?? null,
+      target_feed: targets.feed ?? null,
+      target_love: targets.love ?? null,
+      health: meta.health || 'healthy',
+      tree_species: species || null,
+    };
+
+    res.json(mapped);
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
 // Record a care action for current user tree
 app.post('/api/care', authMiddleware, async (req, res) => {
   try {

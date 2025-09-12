@@ -147,6 +147,31 @@ export const api = {
     }
   },
 
+  async getMyTrees(): Promise<Tree[]> {
+    try {
+      return await request<Tree[]>('/api/my-trees');
+    } catch {
+      // Fallback: get all trees and filter by current user
+      const me = getCurrentUser();
+      if (!me) return [];
+      const rows = await request<Tree[]>('/api/trees');
+      const mine = rows.filter((t) => (t as any).user_id === me.id || (t as any).owner === me.email || (t as any).owner === String(me.id));
+      // fetch species join if possible
+      const species = await request<TreeSpecies[]>('/api/tree_species');
+      return mine.map(tree => {
+        const sp = species.find((s) => s.id === tree.species_id) || null;
+        return { ...tree, tree_species: sp } as Tree;
+      });
+    }
+  },
+
+  async createNewTree(speciesId?: number): Promise<Tree> {
+    return request<Tree>('/api/my-trees', {
+      method: 'POST',
+      body: JSON.stringify({ species_id: speciesId })
+    });
+  },
+
   async postCare(action: 'water' | 'sunlight' | 'feed' | 'love', treeId?: number) {
     if (!treeId) {
       const tree = await this.getMyTree();
