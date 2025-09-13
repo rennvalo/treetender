@@ -34,6 +34,16 @@ CREATE TABLE IF NOT EXISTS users (
 -- Simple example seeds
 INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (1,'Oak','Sturdy oak tree');
 INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (2,'Pine','Evergreen pine');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (3,'Maple','Colorful maple tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (4,'Birch','Graceful birch tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (5,'Willow','Elegant willow tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (6,'Cherry','Beautiful cherry tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (7,'Redwood','Majestic redwood tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (8,'Cypress','Classic cypress tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (9,'Elm','Tall elm tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (10,'Magnolia','Fragrant magnolia tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (11,'Apple','Fruit-bearing apple tree');
+INSERT OR IGNORE INTO tree_species (id, name, description) VALUES (12,'Dogwood','Flowering dogwood tree');
 
 COMMIT;
 

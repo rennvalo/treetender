@@ -128,7 +128,7 @@ app.post('/auth/register', async (req, res) => {
       [email]
     );
 
-    const token = jwt.sign(
+  const token = jwt.sign(
       { sub: user.id, email: user.email, role: user.role },
       SECRET,
       { expiresIn: '30d' }
@@ -222,10 +222,18 @@ async function evaluateAllTrees(reason = 'manual') {
     const l = careCounts.love_count || 0;
 
     let earned = 0;
-    earned += (w === targets.water ? 25 : w);
-    earned += (s === targets.sunlight ? 25 : s);
-    earned += (f === targets.feed ? 25 : f);
-    earned += (l === targets.love ? 25 : l);
+      // Updated scoring logic: if user clicks any action 2 more times beyond optimal, start subtracting
+      function calcPoints(count, target) {
+        if (count === target) return 25;
+        if (count < target) return count;
+        if (count > target + 2) return Math.max(0, target - (count - target - 2));
+        // If count is target+1 or target+2, just award count
+        return count;
+      }
+      earned += calcPoints(w, targets.water);
+      earned += calcPoints(s, targets.sunlight);
+      earned += calcPoints(f, targets.feed);
+      earned += calcPoints(l, targets.love);
 
     // inactivity penalty: 5 per 12h inactive, capped at current points
     let points = meta.growth_points || 0;
@@ -335,14 +343,14 @@ app.post('/api/my-trees', authMiddleware, async (req, res) => {
     const email = req.user.email;
     const { species_id } = req.body || {};
 
-    // Use provided species_id or default to Oak
+    // Use provided species_id or select a random one
     let speciesId = species_id;
     if (!speciesId) {
-      const defaultSpecies = await getAsync(`SELECT id FROM tree_species WHERE name = ?`, ['Oak']);
-      if (!defaultSpecies) {
-        return res.status(500).json({ error: 'Default species not found' });
+      const row = await getAsync(`SELECT id FROM tree_species ORDER BY RANDOM() LIMIT 1`);
+      if (!row) {
+        return res.status(500).json({ error: 'No species found in tree_species table' });
       }
-      speciesId = defaultSpecies.id;
+      speciesId = row.id;
     }
 
     // Initialize metadata for new tree
