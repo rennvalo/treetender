@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   app:
     build: .
@@ -11,6 +12,16 @@ services:
     networks:
       - frontend  # Same network as Nginx Proxy Manager
     restart: always
+    env_file:
+      - .env
+
+  # Cloudflare Tunnel Service
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - frontend  # Keeps it on the same network if needed
 
 networks:
   frontend:
