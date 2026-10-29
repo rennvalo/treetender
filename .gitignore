@@ -1,4 +1,10 @@
 backend_sqlite/data/app.db
+<<<<<<< HEAD
+=======
+docker-compose.yml
+
+>>>>>>> 210d3d3 (Resolved conflicts by keeping remote versions of db and compose)
+>>>>>>> 784f17b (updating)
 # Logs
 logs
 *.log
@@ -23,3 +29,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.env
